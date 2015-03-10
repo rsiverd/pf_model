@@ -109,29 +109,29 @@ def pffit(x, y, nharm, npoly=0, weights=None,
 
 
 # Fit polynomial + Fourier series (statsmodels):
-def pf2dfit(x, y, z, nharm_x, nharm_y, nharm_xy, npoly_x=1, npoly_y=1, npoly_xy=0,
-            weights=None, robust=False, M=sm.robust.norms.HuberT()):
+def pf2dfit(x, y, z, nharm_x=0, nharm_y=0, nharm_xy_x=0, nharm_xy_y=0, npoly_x=1,
+            npoly_y=1, npoly_xy_x=0, npoly_xy_y=0, weights=None, robust=False,
+            M=sm.robust.norms.HuberT()):
     """Polynomial + Fourier fitting routine."""
     if (np.any(x < 0.0) or np.any(x > 1.0)):
         # Rescale the x and y inputs
         x = (x - x.min()) / (x.max() - x.min())
-    
+
     if (np.any(y < 0.0) or np.any(y > 1.0)):
         # Rescale the x and y inputs
         y = (y - y.min()) / (y.max() - y.min())
-                
+
     x2d, y2d = np.meshgrid(x, y)
     # unravel the x,y, and z arrays
     x = x2d.ravel()
     y = y2d.ravel()
     z = z.ravel()
-    
+
     omegaTx = 2.0 * np.pi * x
     omegaTy = 2.0 * np.pi * y
-    omegaTxy = 2.0 * np.pi * x * y
-    
-    dm = np.zeros((npoly_x + npoly_y + npoly_xy + nharm_x + nharm_y + nharm_xy,
-                   z.size))
+
+    dm = np.zeros((npoly_x + npoly_y + npoly_xy_x * npoly_xy_y + 2 * (nharm_x +
+                   nharm_y) + 4 * nharm_xy_x * nharm_xy_y + 1, z.size))
     # Disable robust if statsmodels missing:
     if robust and (not __have_statsmodels__):
         warnings.warn("Robust fitting disabled (statsmodels not found)!\n",
@@ -144,27 +144,43 @@ def pf2dfit(x, y, z, nharm_x, nharm_y, nharm_xy, npoly_x=1, npoly_y=1, npoly_xy=
         weights = None
 
     # Polynomial terms:
-    npoly = npoly_x + npoly_y + npoly_xy
+    npoly = npoly_x + npoly_y + npoly_xy_x * npoly_xy_y
+
     if npoly_x > 0:
-        dm[:npoly_x + 1] = np.tile(x, npoly_x) ** np.array(range(1, npoly_x + 1))
+        dm[:npoly_x] = (np.tile(x, (npoly_x, 1)).T ** np.array(range(1, npoly_x + 1))).T
     if npoly_y > 0:
-        dm[npoly_x + 1: npoly_x + npoly_y + 1] = np.tile(y, npoly_y) ** np.array(range(1, npoly_y + 1))
-    if npoly_xy > 0:
-        dm[npoly_x + npoly_y + 1: npoly + 1] = np.tile(x * y, npoly_xy) ** np.array(range(1, npoly_xy + 1))
-    
+        dm[npoly_x: npoly_x + npoly_y] = (np.tile(y, (npoly_y,1)).T ** np.array(range(1, npoly_y + 1))).T
+    if npoly_xy_x > 0 and npoly_xy_y > 0:
+        m, n = np.meshgrid(range(1, npoly_xy_x + 1), range(1, npoly_xy_y + 1))
+        m = m.ravel()
+        n = n.ravel()
+        dm[npoly_x + npoly_y: npoly] = (np.tile(x, (npoly_xy_x * npoly_xy_y, 1)).T ** m).T
+        dm[npoly_x + npoly_y: npoly] *= (np.tile(y, (npoly_xy_x * npoly_xy_y , 1)).T ** n).T
+
     # Fourier terms:
-    modes_x = np.array(range(1, nharm_x + 1))
-    dm[npoly + 1: npoly + nharm_x + 1] = np.sin(np.outer(modes_x, omegaTx))
-    dm[npoly + nharm_x + 1: npoly + nharm_x + nharm_x + 1] = np.cos(np.outer(modes_x, omegaTx))
-    
-    modes_y = np.array(range(1, nharm_y + 1))
-    dm[npoly + 2 * nharm_x + 1: npoly + 2 * nharm_x + nharm_y + 1] = np.sin(np.outer(modes_y, omegaTy))
-    dm[npoly + 2 * nharm_x + nharm_y + 1: npoly + 2 * nharm_x + 2 * nharm_y + 1] = np.cos(np.outer(modes_y, omegaTy))
-    
-    modes_xy = np.array(range(1, nharm_xy + 1))
-    dm[npoly + 2 * (nharm_x + nharm_y) + 1: npoly + 2 * (nharm_x + nharm_y) + nharm_xy + 1] = np.sin(np.outer(modes_xy, omegaTxy))
-    dm[npoly + 2 * (nharm_x + nharm_y) + nharm_xy + 1:] = np.cos(np.outer(modes_xy, omegaTxy))
-    
+    if nharm_x > 0:
+        modes_x = np.array(range(1, nharm_x + 1))
+        dm[npoly: npoly + nharm_x] = np.sin(np.outer(modes_x, omegaTx))
+        dm[npoly + nharm_x: npoly + nharm_x + nharm_x] = np.cos(np.outer(modes_x, omegaTx))
+
+    if nharm_y > 0:
+        modes_y = np.array(range(1, nharm_y + 1))
+        dm[npoly + 2 * nharm_x: npoly + 2 * nharm_x + nharm_y] = np.sin(np.outer(modes_y, omegaTy))
+        dm[npoly + 2 * nharm_x + nharm_y: npoly + 2 * nharm_x + 2 * nharm_y] = np.cos(np.outer(modes_y, omegaTy))
+
+    # Do the cross terms
+    if nharm_xy_x > 0 and nharm_xy_y > 0:
+        modes_xy_x, modes_xy_y = np.meshgrid(range(1, nharm_xy_x + 1), range(1, nharm_xy_y + 1))
+        modes_xy_x = modes_xy_x.ravel()
+        modes_xy_y = modes_xy_y.ravel()
+
+        dm[npoly + 2 * (nharm_x + nharm_y):-1: 4] = np.sin(np.outer(modes_xy_x, omegaTx)) * np.sin(np.outer(modes_xy_y, omegaTy))
+        dm[npoly + 2 * (nharm_x + nharm_y) + 1:-1 : 4] = np.sin(np.outer(modes_xy_x, omegaTx)) * np.cos(np.outer(modes_xy_y, omegaTy))
+        dm[npoly + 2 * (nharm_x + nharm_y) + 2:-1 : 4] = np.cos(np.outer(modes_xy_x, omegaTx)) * np.sin(np.outer(modes_xy_y, omegaTy))
+        dm[npoly + 2 * (nharm_x + nharm_y) + 3:-1 : 4] = np.cos(np.outer(modes_xy_x, omegaTx)) * np.cos(np.outer(modes_xy_y, omegaTy))
+
+    dm[-1] = np.ones(z.size)
+
     # Make design matrix (with weights if needed):
     if weights is not None:
         design_matrix = dm.T * np.sqrt(weights)[:, np.newaxis]
@@ -181,19 +197,7 @@ def pf2dfit(x, y, z, nharm_x, nharm_y, nharm_xy, npoly_x=1, npoly_y=1, npoly_xy=
         answer = np.linalg.lstsq(design_matrix, z_vals)
         coeffs = answer[0]
 
-    # Parse parameters:
-    px_terms = coeffs[0:npoly_x]  # polynomial terms
-    py_terms = coeffs[npoly_x:npoly_x + npoly_y]  # polynomial terms
-    pxy_terms = coeffs[npoly_x + npoly_y : npoly]
-    
-    fx_sin = coeffs[npoly: npoly + nharm_x]
-    fx_cos = coeffs[npoly + nharm_x: npoly + 2 * nharm_x]
-    fy_sin = coeffs[npoly + 2 * nharm_x: npoly + 2 * nharm_x + nharm_y]
-    fy_cos = coeffs[npoly + 2 * nharm_x + nharm_y : npoly + 2 * nharm_x + 2 * nharm_y]
-    fxy_sin = coeffs[npoly + 2 * nharm_x + 2 * nharm_y: npoly + 2 * nharm_x + 2 * nharm_y + nharm_xy]
-    fxy_cos = coeffs[npoly + 2 * nharm_x + 2 * nharm_y + nharm_xy: ]
-    
-    return [px_terms, py_terms, pxy_terms, fx_sin, fx_cos, fy_sin, fy_cos, fxy_sin, fxy_cos]
+    return coeffs
 
 # #--------------------------------------------------------------------------##
 # Evaluate polynomial + Fourier model at specified positions:
@@ -221,57 +225,69 @@ def pfcalc(model, x):
     return result
 
 
-def pf2dcalc(model, x, y):
+def pf2dcalc(coeffs, x, y, npoly_x=1, npoly_y=1, npoly_xy_x=0, npoly_xy_y=0, nharm_x=0,
+             nharm_y=0, nharm_xy_x=0, nharm_xy_y=0):
     """Evaluate poly+Fourier model."""
     if (np.any(x < 0.0) or np.any(x > 1.0)):
         # Rescale the x and y inputs
         x = (x - x.min()) / (x.max() - x.min())
-    
+
     if (np.any(y < 0.0) or np.any(y > 1.0)):
         # Rescale the x and y inputs
         y = (y - y.min()) / (y.max() - y.min())
-            
+
     nx = len(x)
     ny = len(y)
-    
+
     x2d, y2d = np.meshgrid(x, y)
     # unravel the x,y, and z arrays
     x = x2d.ravel()
     y = y2d.ravel()
 
     # Phase and results vectors:
-    # convert to radians    
+    # convert to radians
     omegaTx = 2.0 * np.pi * x
     omegaTy = 2.0 * np.pi * y
-    omegaTxy = 2.0 * np.pi * x * y
 
     result = np.zeros(ny * nx)  # new Y values
-    px_terms, py_terms, pxy_terms, fx_sin, fx_cos, fy_sin, fy_cos, fxy_sin, fxy_cos = model  # parse model
 
+    npoly = npoly_x + npoly_y + npoly_xy_x * npoly_xy_y
     # Add polynomial terms:
-    if len(px_terms) > 0:
-        result += px_terms * np.tile(x, len(px_terms)) ** np.array(range(1, len(px_terms) + 1))
-    if len(py_terms) > 0:
-        result += py_terms * np.tile(y, len(py_terms)) ** np.array(range(1, len(py_terms) + 1))
-    if len(pxy_terms) > 0:
-        result += pxy_terms * np.tile(x * y, len(pxy_terms)) ** np.array(range(1, len(pxy_terms) + 1))
+    if npoly_x > 0:
+        result += (coeffs[:npoly_x] * (np.tile(x, (npoly_x,1))).T ** np.array(range(1, npoly_x + 1))).sum(axis=1)
+
+    if npoly_y > 0:
+        result += (coeffs[npoly_x:npoly_x + npoly_y] * (np.tile(y, (npoly_y,1))).T ** np.array(range(1, npoly_y + 1))).sum(axis=1)
+
+    if npoly_xy_x > 0 and npoly_xy_y > 0:
+        m, n = np.meshgrid(range(1, npoly_xy_x + 1), range(1, npoly_xy_y + 1))
+        m = m.ravel()
+        n = n.ravel()
+        result += (coeffs[npoly_x + npoly_y: npoly] * (np.tile(x, (npoly_xy_x * npoly_xy_y,1))).T ** m * np.tile(y, (npoly_xy_x * npoly_xy_y, 1)).T ** n).sum(axis=1)
 
     # Add Fourier terms:
-    if len(fx_sin) > 0:
-        modes_x = np.array(range(1, len(fx_sin) + 1))
-        result += fx_sin * np.sin(np.outer(modes_x, omegaTx))
-        result += fx_cos * np.cos(np.outer(modes_x, omegaTx))    
-    
-    if len(fy_sin) > 0:
-        modes_y = np.array(range(1, len(fxy_sin) + 1))
-        result += fy_sin * np.sin(np.outer(modes_y, omegaTy))
-        result += fy_cos * np.cos(np.outer(modes_y, omegaTy))
-    
-    if len(fxy_sin) > 0:
-        modes_xy = np.array(range(1, len(fxy_sin) + 1))
-        result += fxy_sin * np.sin(np.outer(modes_xy, omegaTxy))
-        result += fxy_cos * np.cos(np.outer(modes_xy, omegaTxy))
+    if nharm_x > 0:
+        modes_x = np.array(range(1, nharm_x + 1))
+        result += (coeffs[npoly: npoly + nharm_x] * np.sin(np.outer(modes_x, omegaTx)).T).sum(axis=1)
+        result += (coeffs[npoly + nharm_x: npoly + 2 * nharm_x] * np.cos(np.outer(modes_x, omegaTx)).T).sum(axis=1)
 
+    if nharm_y > 0:
+        modes_y = np.array(range(1, nharm_y + 1))
+        result += (coeffs[npoly + 2 * nharm_x: npoly + 2 * nharm_x + nharm_y] * np.sin(np.outer(modes_y, omegaTy)).T).sum(axis=1)
+        result += (coeffs[npoly + 2 * nharm_x + nharm_y: npoly + 2 * (nharm_x + nharm_y)] * np.cos(np.outer(modes_y, omegaTy)).T).sum(axis=1)
+
+    # Do the cross terms
+    if nharm_xy_x > 0 and nharm_xy_y > 0:
+        modes_xy_x, modes_xy_y = np.meshgrid(range(1, nharm_xy_x + 1), range(1, nharm_xy_y + 1))
+        modes_xy_x = modes_xy_x.ravel()
+        modes_xy_y = modes_xy_y.ravel()
+
+        result += (coeffs[npoly + 2 * (nharm_x + nharm_y) :-1: 4] * (np.sin(np.outer(modes_xy_x, omegaTx)) * np.sin(np.outer(modes_xy_y, omegaTy))).T).sum(axis=1)
+        result += (coeffs[npoly + 2 * (nharm_x + nharm_y) + 1:-1 : 4] * (np.sin(np.outer(modes_xy_x, omegaTx)) * np.cos(np.outer(modes_xy_y, omegaTy))).T).sum(axis=1)
+        result += (coeffs[npoly + 2 * (nharm_x + nharm_y) + 2:-1 : 4] * (np.cos(np.outer(modes_xy_x, omegaTx)) * np.sin(np.outer(modes_xy_y, omegaTy))).T).sum(axis=1)
+        result += (coeffs[npoly + 2 * (nharm_x + nharm_y) + 3:-1 : 4] * (np.cos(np.outer(modes_xy_x, omegaTx)) * np.cos(np.outer(modes_xy_y, omegaTy))).T).sum(axis=1)
+
+    result += coeffs[-1]
     return result.reshape((ny, nx))
 
 # #--------------------------------------------------------------------------##

@@ -11,7 +11,7 @@
 #--------------------------------------------------------------------------
 
 ## Current version:
-__version__ = "0.2.1"
+__version__ = "0.2.2"
 
 ## Modules:
 import os
@@ -111,52 +111,52 @@ def pffit(x, y, nharm, npoly=0, weights=None,
 ##--------------------------------------------------------------------------##
 ## Evaluate polynomial + Fourier model at specified positions:
 def pfcalc(model, x):
-   """Evaluate poly+Fourier model."""
-   if (np.any(x < 0.0) or np.any(x > 1.0)):
-      sys.stderr.write("x vector is out of bounds! (need 0 <= x < 1)\n")
-      return None
+    """Evaluate poly+Fourier model."""
+    if (np.any(x < 0.0) or np.any(x > 1.0)):
+        sys.stderr.write("x vector is out of bounds! (need 0 <= x < 1)\n")
+        return None
 
-   # Phase and results vectors:
-   omegaT = 2.0 * np.pi * x            # convert to radians
-   result = np.zeros_like(x)           # new Y values
-   p_terms, f_ampli, f_shift = model   # parse model
+    # Phase and results vectors:
+    omegaT = 2.0 * np.pi * x            # convert to radians
+    result = np.zeros_like(x)           # new Y values
+    p_terms, f_ampli, f_shift = model   # parse model
 
-   # Add polynomial terms:
-   for pow, coeff in enumerate(p_terms):
-      result += coeff * x**pow
+    # Add polynomial terms:
+    for pow, coeff in enumerate(p_terms):
+        result += coeff * x**pow
 
-   # Add Fourier terms:
-   for h, (amp, shift) in enumerate(zip(f_ampli, f_shift)):
-      phase = ((h + 1.0) * omegaT) + shift
-      result += amp * np.sin(phase)
+    # Add Fourier terms:
+    for h, (amp, shift) in enumerate(zip(f_ampli, f_shift)):
+        phase = ((h + 1.0) * omegaT) + shift
+        result += amp * np.sin(phase)
 
-   return result
+    return result
 
 ##--------------------------------------------------------------------------##
 ## Evaluate slope (derivative) of polynomial + Fourier model:
 def pfslope(model, x):
-   """Evaluate poly+Fourier model slope."""
-   if (np.any(x < 0.0) or np.any(x > 1.0)):
-      sys.stderr.write("x vector is out of bounds! (need 0 <= x < 1)\n")
-      return None
+    """Evaluate poly+Fourier model slope."""
+    if (np.any(x < 0.0) or np.any(x > 1.0)):
+        sys.stderr.write("x vector is out of bounds! (need 0 <= x < 1)\n")
+        return None
 
-   # Phase and results vectors:
-   omegaT = 2.0 * np.pi * x            # convert to radians
-   slopes = np.zeros_like(x)           # new slope values
-   p_terms, f_ampli, f_shift = model   # parse model
+    # Phase and results vectors:
+    omegaT = 2.0 * np.pi * x            # convert to radians
+    slopes = np.zeros_like(x)           # new slope values
+    p_terms, f_ampli, f_shift = model   # parse model
 
-   # Add polynomial terms:
-   for pow, coeff in enumerate(p_terms):
-      slopes += pow * coeff * x**(pow - 1.0)
-      #if (pow > 0.0):
-      #   slopes += pow * coeff * x**(pow - 1.0)
+    # Add polynomial terms:
+    for pow, coeff in enumerate(p_terms):
+        slopes += pow * coeff * x**(pow - 1.0)
+        #if (pow > 0.0):
+        #   slopes += pow * coeff * x**(pow - 1.0)
 
-   # Add Fourier terms:
-   for h, (amp, shift) in enumerate(zip(f_ampli, f_shift)):
-      phase = ((h + 1.0) * omegaT) + shift
-      slopes += (h + 1.0) * amp * np.cos(phase)
+    # Add Fourier terms:
+    for h, (amp, shift) in enumerate(zip(f_ampli, f_shift)):
+        phase = ((h + 1.0) * omegaT) + shift
+        slopes += (h + 1.0) * amp * np.cos(phase)
 
-   return slopes
+    return slopes
 
 
 
@@ -165,6 +165,8 @@ def pfslope(model, x):
 #---------------------------------------------------------------------
 #
 #  2015-06-24:
+#     -- Increased __version__ to 0.2.2.
+#     -- Fixed indentation in everything else.
 #     -- Increased __version__ to 0.2.1.
 #     -- Fixed indentation in pffit().
 #

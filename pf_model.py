@@ -5,13 +5,13 @@
 #
 # Rob Siverd
 # Created:       2014-09-30
-# Last modified: 2015-06-24
+# Last modified: 2018-09-12
 #--------------------------------------------------------------------------
 #**************************************************************************
 #--------------------------------------------------------------------------
 
 ## Current version:
-__version__ = "0.2.2"
+__version__ = "0.2.3"
 
 ## Modules:
 import os
@@ -23,10 +23,12 @@ import numpy as np
 #from functools import partial
 try:
     import statsmodels.api as sm
-    __have_statsmodels__ = True
+    _have_statsmodels = True
+    _default_M_norm = sm.robust.norms.HuberT()
 except ImportError:
     sys.stderr.write("statsmodels not found ... robust fitting disabled.\n")
-    __have_statsmodels__ = False
+    _have_statsmodels = False
+    _default_M_norm = None
 #import theil_sen as ts
 
 ##--------------------------------------------------------------------------##
@@ -39,7 +41,7 @@ except ImportError:
 
 ##--------------------------------------------------------------------------##
 ## Short-hand for M-estimator selection:
-#if __have_statsmodels__:
+#if _have_statsmodels:
 #   M_list = {}
 #   M_list['huber'] = sm.robust.norms.HuberT()
 #   M_list['tukey'] = sm.robust.norms.TukeyBiweight()
@@ -54,7 +56,7 @@ except ImportError:
 ##--------------------------------------------------------------------------##
 ## Fit polynomial + Fourier series (statsmodels):
 def pffit(x, y, nharm, npoly=0, weights=None, 
-        robust=False, M=sm.robust.norms.HuberT()):
+        robust=False, M=_default_M_norm):
     """Polynomial + Fourier fitting routine."""
     if (np.any(x < 0.0) or np.any(x > 1.0)):
         sys.stderr.write("x vector is out of bounds! (need 0 < x < 1)\n")
@@ -63,7 +65,7 @@ def pffit(x, y, nharm, npoly=0, weights=None,
     dm_list = [np.ones_like(x)]
 
     # Disable robust if statsmodels missing:
-    if robust and (not __have_statsmodels__):
+    if robust and (not _have_statsmodels):
         sys.stderr.write("Robust fitting disabled (statsmodels not found)!\n")
         robust = False
 
